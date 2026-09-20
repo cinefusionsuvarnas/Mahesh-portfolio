@@ -2643,6 +2643,10 @@ body.light .cart-form input:-webkit-autofill:active {
         display: none
     }
 
+    .header-actions {
+        margin-left: auto;
+    }
+
     .mobile-menu-btn {
         display: block
     }

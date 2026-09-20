@@ -1,3 +1,4 @@
+(function() {
 const cartCountHeader = document.querySelector('#cartCountHeader');
 const toast = document.querySelector('#purchaseToast');
 const storeGrid = document.querySelector('.product-store-grid');
@@ -43,7 +44,7 @@ function updateCartUI() {
           ${item.image ? `<img src="../${item.image}" alt="${item.name}" class="cart-item-img">` : `<div class="cart-item-img-placeholder"></div>`}
           <div class="cart-item-info">
             <span class="cart-item-title">${item.name}</span>
-            <span class="cart-item-price">$${item.price.toFixed(2)}</span>
+            <span class="cart-item-price">?${item.price.toFixed(2)}</span>
           </div>
           <button type="button" class="cart-close" style="font-size:18px;" onclick="removeCartItem(${index})" aria-label="Remove item">&times;</button>
         </div>
@@ -173,13 +174,20 @@ if (checkoutForm) {
     submitCheckoutBtn.textContent = 'Submitting...';
     
     const formData = new FormData(checkoutForm);
-    formData.append('items_json', JSON.stringify(cartItems));
-    formData.append('total_amount', cartTotal.toFixed(2));
+    const checkoutData = {
+      customer_name: formData.get('customer_name'),
+      customer_email: formData.get('customer_email'),
+      customer_phone: formData.get('customer_phone'),
+      transaction_id: formData.get('transaction_id'),
+      total_amount: cartTotal.toFixed(2),
+      items: cartItems
+    };
     
     try {
-      const res = await fetch('../api/checkout.php', {
+      const res = await fetch('/api/checkout', {
         method: 'POST',
-        body: formData
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(checkoutData)
       });
       const data = await res.json();
       
@@ -207,3 +215,5 @@ if (checkoutForm) {
 
 // Initial UI sync
 updateCartUI();
+
+})();

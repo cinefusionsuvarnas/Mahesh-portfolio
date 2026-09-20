@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+(function() {
   const mobileMenuBtn = document.querySelector('.mobile-menu-btn');
   const mobileNavOverlay = document.querySelector('.mobile-nav-overlay');
   const mobileNavClose = document.querySelector('.mobile-nav-close');
@@ -23,4 +23,5 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
-});
+
+})();

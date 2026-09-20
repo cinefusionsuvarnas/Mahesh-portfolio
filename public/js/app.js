@@ -1,3 +1,4 @@
+(function() {
 const $ = (selector, scope = document) => scope.querySelector(selector);
 const $$ = (selector, scope = document) => [...scope.querySelectorAll(selector)];
 
@@ -17,10 +18,10 @@ const productGrid = $('#productGrid');
 const search = $('#productSearch');
 let selectedFilter = 'all';
 
-const apiBasePath = window.location.pathname.includes('/pages/') ? '../api' : './api';
+const apiBasePath = '/api';
 
 if (productGrid) {
-  fetch(`${apiBasePath}/get_portfolio.php`)
+  fetch(`${apiBasePath}/portfolio`)
     .then(res => res.json())
     .then(data => {
         function filterProducts() {
@@ -48,16 +49,16 @@ if (productGrid) {
 
         productGrid.innerHTML = data.portfolio.map((item, index) => {
           const delayClass = index > 0 ? 'reveal-delay' : '';
-          const isVideo = item.image_path.match(/\.(mp4|webm|ogg)$/i);
-          const onClickAttr = `onclick="openPortfolioModal('${item.title.replace(/'/g, "\\'")}', '${item.category.replace(/'/g, "\\'")}', '${item.description.replace(/'/g, "\\'")}', '${item.image_path}', ${isVideo ? 'true' : 'false'})" style="cursor: pointer;"`;
+          const isVideo = (item.imagePath || "").match(/\.(mp4|webm|ogg)$/i);
+          const onClickAttr = `onclick="openPortfolioModal('${item.title.replace(/'/g, "\\'")}', '${item.category.replace(/'/g, "\\'")}', '${item.description.replace(/'/g, "\\'")}', '${(item.imagePath || "")}', ${isVideo ? 'true' : 'false'})" style="cursor: pointer;"`;
           
           const visualContent = isVideo 
             ? `<div class="product-visual visual-swell" style="position: relative; overflow: hidden; height: 290px; width: max-content; max-width: 100%;" aria-label="View ${item.title} case study" ${onClickAttr}>
-                 <video src="${item.image_path}" style="height: 100%; max-width: 100%; object-fit: cover; display: block;" muted autoplay loop playsinline></video>
+                 <video src="${(item.imagePath || "")}" style="height: 100%; max-width: 100%; object-fit: cover; display: block;" muted autoplay loop playsinline></video>
                  <span class="product-badge" style="z-index: 1;">${item.category}</span>
                </div>`
             : `<div class="product-visual visual-swell" style="position: relative; overflow: hidden; height: 290px; width: max-content; max-width: 100%;" aria-label="View ${item.title} case study" ${onClickAttr}>
-                 <img src="${item.image_path}" style="height: 100%; max-width: 100%; object-fit: cover; display: block;">
+                 <img src="${(item.imagePath || "")}" style="height: 100%; max-width: 100%; object-fit: cover; display: block;">
                  <span class="product-badge" style="z-index: 1;">${item.category}</span>
                </div>`;
 
@@ -69,7 +70,7 @@ if (productGrid) {
                 <h3>${item.title}</h3>
                 <p>${item.description}</p>
               </div>
-              <div class="product-meta"><span>CASE STUDY</span><strong>${item.year}</strong></div>
+              <div class="product-meta"><span>CASE STUDY</span><strong>${(item.year || new Date(item.createdAt).getFullYear() || "")}</strong></div>
             </div>
           </article>
           `;
@@ -172,14 +173,13 @@ if (prevProductBtn && nextProductBtn && productGrid) {
 // Portfolio page logic
 const portfolioGrid = $('.portfolio-grid');
 if (portfolioGrid) {
-  fetch(`${apiBasePath}/get_portfolio.php`)
+  fetch(`${apiBasePath}/portfolio`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.portfolio.length) {
         portfolioGrid.innerHTML = data.portfolio.map((item, index) => {
           const isFeatured = index === 0 ? 'is-featured' : '';
-          // Ensure correct path relative to portfolio.html
-          const imagePath = item.image_path.startsWith('./') ? '.' + item.image_path : '../' + item.image_path;
+          const imagePath = item.imagePath || "";
           const isVideo = imagePath.match(/\.(mp4|webm|ogg)$/i);
           const artHeight = index === 0 ? '425px' : '330px';
           const onClickAttr = `onclick="openPortfolioModal('${item.title.replace(/'/g, "\\'")}', '${item.category.replace(/'/g, "\\'")}', '${item.description.replace(/'/g, "\\'")}', '${imagePath}', ${isVideo ? 'true' : 'false'})" style="cursor: pointer;"`;
@@ -202,7 +202,7 @@ if (portfolioGrid) {
                 <h2>${item.title}</h2>
                 <p>${item.description}</p>
               </div>
-              <span>${item.year}</span>
+              <span>${(item.year || new Date(item.createdAt).getFullYear() || "")}</span>
             </div>
           </article>
           `;
@@ -219,7 +219,7 @@ if (portfolioGrid) {
 // Dynamic Scroll Track logic for index.html "03 / SELECTED WORK"
 const adminScrollTrack = $('#adminScrollTrack');
 if (adminScrollTrack) {
-  fetch(`${apiBasePath}/get_portfolio.php`)
+  fetch(`${apiBasePath}/portfolio`)
     .then(res => res.json())
     .then(data => {
       if (data.success && data.portfolio.length) {
@@ -227,8 +227,7 @@ if (adminScrollTrack) {
         const displayItems = [...data.portfolio, ...data.portfolio]; 
         
         adminScrollTrack.innerHTML = displayItems.map((item, index) => {
-          // Adjust image path for index.html
-          const imagePath = item.image_path.startsWith('./') ? item.image_path : './' + item.image_path;
+          const imagePath = item.imagePath || "";
           const isVideo = imagePath.match(/\.(mp4|webm|ogg)$/i);
           const onClickAttr = `onclick="openPortfolioModal('${item.title.replace(/'/g, "\\'")}', '${item.category.replace(/'/g, "\\'")}', '${item.description.replace(/'/g, "\\'")}', '${imagePath}', ${isVideo ? 'true' : 'false'})" style="cursor: pointer;"`;
 
@@ -284,22 +283,39 @@ if (testimonials.length && testimonialIndex) {
   $('#nextTestimonial').addEventListener('click', () => showTestimonial(activeTestimonial + 1));
 }
 
-const themeButton = $('#themeButton');
-if (themeButton) {
-  // Check and apply saved theme on load
+// Theme Toggle logic with event delegation for SPA support
+if (!window.__themeInitialized) {
+  window.__themeInitialized = true;
+  
   if (localStorage.getItem('theme') === 'light') {
     document.body.classList.add('light');
-    themeButton.querySelector('span').textContent = '☼';
   }
 
-  themeButton.addEventListener('click', () => {
-    document.body.classList.toggle('light');
-    const isLight = document.body.classList.contains('light');
-    localStorage.setItem('theme', isLight ? 'light' : 'dark');
-    themeButton.querySelector('span').textContent = isLight ? '☼' : '◑';
-    themeButton.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Toggle color theme');
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('.theme-button, #themeButton');
+    if (btn) {
+      document.body.classList.toggle('light');
+      const isLight = document.body.classList.contains('light');
+      localStorage.setItem('theme', isLight ? 'light' : 'dark');
+      
+      document.querySelectorAll('.theme-button, #themeButton').forEach(b => {
+        const span = b.querySelector('span');
+        if (span) span.textContent = isLight ? '☽' : '◐';
+        b.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Toggle color theme');
+      });
+    }
   });
 }
+
+// Sync icons on every script execution in case of page transition
+setTimeout(() => {
+  const isLight = document.body.classList.contains('light');
+  document.querySelectorAll('.theme-button, #themeButton').forEach(b => {
+    const span = b.querySelector('span');
+    if (span) span.textContent = isLight ? '☽' : '◐';
+    b.setAttribute('aria-label', isLight ? 'Switch to dark theme' : 'Toggle color theme');
+  });
+}, 0);
 
 // Inject Global Portfolio Modal
 document.body.insertAdjacentHTML('beforeend', `
@@ -340,3 +356,5 @@ document.addEventListener('keydown', (event) => {
     search.focus();
   }
 });
+
+})();
