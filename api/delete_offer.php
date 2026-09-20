@@ -1,46 +1,180 @@
 <?php
+
 session_start();
-require 'db.php';
 
-header('Content-Type: application/json');
+require_once __DIR__ . '/db.php';
 
-// Check if user is logged in
-if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
-    echo json_encode(['success' => false, 'message' => 'Unauthorized access.']);
-    exit;
-}
+header('Content-Type: application/json; charset=utf-8');
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $id = $_POST['id'] ?? '';
+try {
 
-    if (empty($id)) {
-        echo json_encode(['success' => false, 'message' => 'Offer ID is required.']);
+    // --------------------------------------------------
+    // CHECK ADMIN LOGIN
+    // --------------------------------------------------
+    if (
+        !isset($_SESSION['admin_logged_in']) ||
+        $_SESSION['admin_logged_in'] !== true
+    ) {
+        http_response_code(401);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Unauthorized. Please login again.'
+        ]);
+
         exit;
     }
 
-    try {
-        // Fetch the image path so we can delete the file
-        $stmt = $pdo->prepare('SELECT image_path FROM offers WHERE id = ?');
-        $stmt->execute([$id]);
-        $offer = $stmt->fetch();
-        
-        $stmt = $pdo->prepare('DELETE FROM offers WHERE id = ?');
-        $stmt->execute([$id]);
-        
-        if ($stmt->rowCount() > 0) {
-            // Delete the image file if it exists
-            if ($offer && $offer['image_path'] && file_exists('../' . $offer['image_path'])) {
-                unlink('../' . $offer['image_path']);
-            }
-            
-            echo json_encode(['success' => true, 'message' => 'Offer deleted successfully.']);
-        } else {
-            echo json_encode(['success' => false, 'message' => 'Offer not found.']);
-        }
-    } catch (PDOException $e) {
-        echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+    // --------------------------------------------------
+    // ONLY POST
+    // --------------------------------------------------
+    if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
+        http_response_code(405);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Only POST requests are allowed.'
+        ]);
+
+        exit;
     }
-} else {
-    echo json_encode(['success' => false, 'message' => 'Invalid request method.']);
+
+    // --------------------------------------------------
+    // GET OFFER ID
+    // --------------------------------------------------
+    $id = $_POST['id'] ?? null;
+
+    // Also support JSON
+    if ($id === null) {
+
+        $raw = file_get_contents('php://input');
+
+        if (!empty($raw)) {
+
+            $json = json_decode($raw, true);
+
+            if (is_array($json)) {
+                $id = $json['id'] ?? null;
+            }
+        }
+    }
+
+    // --------------------------------------------------
+    // VALIDATE ID
+    // --------------------------------------------------
+    if ($id === null || $id === '' || !is_numeric($id)) {
+
+        http_response_code(400);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Invalid offer ID.',
+            'received_id' => $id
+        ]);
+
+        exit;
+    }
+
+    $id = (int)$id;
+
+    // --------------------------------------------------
+    // FIND OFFER FIRST
+    // --------------------------------------------------
+    $stmt = $pdo->prepare(
+        'SELECT id, image_path FROM offers WHERE id = :id'
+    );
+
+    $stmt->execute([
+        ':id' => $id
+    ]);
+
+    $offer = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if (!$offer) {
+
+        http_response_code(404);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Offer not found.',
+            'id' => $id
+        ]);
+
+        exit;
+    }
+
+    // --------------------------------------------------
+    // DELETE OFFER
+    // --------------------------------------------------
+    $stmt = $pdo->prepare(
+        'DELETE FROM offers WHERE id = :id'
+    );
+
+    $stmt->execute([
+        ':id' => $id
+    ]);
+
+    if ($stmt->rowCount() !== 1) {
+
+        http_response_code(500);
+
+        echo json_encode([
+            'success' => false,
+            'message' => 'Database did not delete the offer.'
+        ]);
+
+        exit;
+    }
+
+    // --------------------------------------------------
+    // DELETE IMAGE FROM LOCAL SERVER
+    // --------------------------------------------------
+    if (!empty($offer['image_path'])) {
+
+        $imagePath = __DIR__ . '/../' . ltrim(
+            $offer['image_path'],
+            '/\\'
+        );
+
+        if (is_file($imagePath)) {
+            @unlink($imagePath);
+        }
+    }
+
+    // --------------------------------------------------
+    // SUCCESS
+    // --------------------------------------------------
+    echo json_encode([
+        'success' => true,
+        'message' => 'Offer deleted successfully.',
+        'id' => $id
+    ]);
+
+    exit;
+
+} catch (PDOException $e) {
+
+    http_response_code(500);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Database error while deleting offer.',
+        'error' => $e->getMessage(),
+        'sql_state' => $e->getCode()
+    ]);
+
+    exit;
+
+} catch (Throwable $e) {
+
+    http_response_code(500);
+
+    echo json_encode([
+        'success' => false,
+        'message' => 'Server error while deleting offer.',
+        'error' => $e->getMessage()
+    ]);
+
+    exit;
 }
 ?>
